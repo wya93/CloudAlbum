@@ -3,31 +3,21 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
-import boto3
-from botocore.client import Config
-from django.conf import settings
 from django.shortcuts import get_object_or_404
 
-from .models import Album, Photo, Tag
+from .models import Album, Photo, Tag, AlbumShare
 from .serializers import AlbumSerializer, PhotoSerializer, TagSerializer
-from gallery.tasks import generate_thumbnail, extract_exif_task
 from django.core.cache import cache
 from core.settings import CACHE_TTL
-from .models import AlbumShare
 from django.utils import timezone
 from datetime import timedelta
 from .utils_uploads import build_object_key, validate_upload_meta
-from .tasks_ai import task_clip_vector_and_labels, task_face_embeddings_and_group
-
-def _s3_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=getattr(settings, "AWS_S3_ENDPOINT_URL", None),
-        region_name=getattr(settings, "AWS_S3_REGION_NAME", None),
-        aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
-        aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
-        config=Config(signature_version=getattr(settings, "AWS_S3_SIGNATURE_VERSION", "s3v4")),
-    )
+from .services import (
+    StorageBackendNotConfigured,
+    create_photos_from_form_upload,
+    dispatch_post_upload_tasks,
+    get_upload_storage_service,
+)
 
 class AlbumViewSet(viewsets.ModelViewSet):
     """相册管理"""
@@ -49,14 +39,7 @@ class AlbumViewSet(viewsets.ModelViewSet):
         if not files:
             return Response({"error": "未选择文件"}, status=status.HTTP_400_BAD_REQUEST)
 
-        photos = []
-        for f in files:
-            photo = Photo.objects.create(owner=request.user, album=album, image=f)
-            generate_thumbnail.delay(photo.id)  # 异步生成缩略图
-            extract_exif_task.delay(photo.id)  # 异步生成exif信息
-            task_clip_vector_and_labels.delay(photo.id)
-            task_face_embeddings_and_group.delay(photo.id)
-            photos.append(photo)
+        photos = create_photos_from_form_upload(request.user, album, files)
 
         return Response(PhotoSerializer(photos, many=True).data, status=status.HTTP_201_CREATED)
 
@@ -86,9 +69,11 @@ class AlbumViewSet(viewsets.ModelViewSet):
         return Response({"share_url": url, "expires_at": share.expires_at})
 
     @action(methods=['post'], detail=False, url_path='presign_upload')
-    def persion_upload(self, request):
-        if getattr(settings, 'STORAGE_BACKEND', 'local') != 's3':
-            return Response({'message': '当前为本地存储，请用表单上传接口'}, status=status.HTTP_400_BAD_REQUEST)
+    def presign_upload(self, request):
+        try:
+            storage = get_upload_storage_service()
+        except StorageBackendNotConfigured as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         album_id = int(request.data.get("album_id", 0))
         filename = request.data.get("filename") or "image.jpg"
         content_type = request.data.get("content_type") or "image/jpeg"
@@ -101,17 +86,7 @@ class AlbumViewSet(viewsets.ModelViewSet):
             return Response({"detail": str(e)}, status=400)
 
         object_key = build_object_key(request.user.id, album.id, filename)
-        s3 = _s3_client()
-        url = s3.generate_presigned_url(
-            ClientMethod="put_object",
-            Params={
-                "Bucket": BUCKET,
-                "Key": object_key,
-                "ContentType": content_type,
-                "ACL": "private",
-            },
-            ExpiresIn=60 * 5,
-        )
+        url = storage.generate_presigned_put(object_key, content_type)
         return Response({"object_key": object_key, "url": url, "method": "PUT", "headers": {"Content-Type": content_type}})
 
     @action(methods=['post'], detail=False, url_path='finalize_upload')
@@ -124,6 +99,8 @@ class AlbumViewSet(viewsets.ModelViewSet):
         object_key = request.data.get("object_key")
         title = request.data.get("title", "")
         tag_ids = request.data.get("tag_ids", [])
+        if isinstance(tag_ids, str):
+            tag_ids = [tag_ids]
 
         album = get_object_or_404(Album, id=album_id, owner=request.user)
         if not object_key or not object_key.startswith(f"photos/{request.user.id}/{album.id}/"):
@@ -135,10 +112,7 @@ class AlbumViewSet(viewsets.ModelViewSet):
             photo.tags.set(tag_ids)
 
         # 异步：缩略图 + EXIF
-        generate_thumbnail.delay(photo.id)
-        extract_exif_task.delay(photo.id)
-        task_clip_vector_and_labels.delay(photo.id)
-        task_face_embeddings_and_group.delay(photo.id)
+        dispatch_post_upload_tasks(photo.id)
 
         return Response(PhotoSerializer(photo).data, status=201)
 
@@ -150,8 +124,10 @@ class AlbumViewSet(viewsets.ModelViewSet):
         初始化分片上传
         body: {album_id, filename, content_type, size}
         """
-        if getattr(settings, "STORAGE_BACKEND", "local") != "s3":
-            return Response({"detail": "当前为本地存储，请使用表单上传接口"}, status=400)
+        try:
+            storage = get_upload_storage_service()
+        except StorageBackendNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=400)
 
         album_id = int(request.data.get("album_id", 0))
         filename = request.data.get("filename") or "image.jpg"
@@ -166,8 +142,7 @@ class AlbumViewSet(viewsets.ModelViewSet):
             return Response({"detail": str(e)}, status=400)
 
         object_key = build_object_key(request.user.id, album.id, filename)
-        s3 = _s3_client()
-        init = s3.create_multipart_upload(Bucket=BUCKET, Key=object_key, ContentType=content_type, ACL="private")
+        init = storage.initiate_multipart(object_key, content_type)
         upload_id = init["UploadId"]
         return Response({"object_key": object_key, "upload_id": upload_id})
 
@@ -185,12 +160,12 @@ class AlbumViewSet(viewsets.ModelViewSet):
         if not object_key or f"/{request.user.id}/" not in object_key:
             return Response({"detail": "object_key 非法"}, status=400)
 
-        s3 = _s3_client()
-        url = s3.generate_presigned_url(
-            ClientMethod="upload_part",
-            Params={"Bucket": BUCKET, "Key": object_key, "UploadId": upload_id, "PartNumber": part_number},
-            ExpiresIn=60 * 10,
-        )
+        try:
+            storage = get_upload_storage_service()
+        except StorageBackendNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=400)
+
+        url = storage.generate_presigned_part_url(object_key, upload_id, part_number)
         return Response({"url": url})
 
     @action(methods=['post'], detail=False, url_path='multipart_complete')
@@ -201,28 +176,26 @@ class AlbumViewSet(viewsets.ModelViewSet):
         """
         object_key = request.data.get("object_key")
         upload_id = request.data.get("upload_id")
-        tag_ids = request.data.get("upload_id")
+        tag_ids = request.data.get("tag_ids", [])
+        if isinstance(tag_ids, str):
+            tag_ids = [tag_ids]
         parts = request.data.get("parts", [])
         title = request.data.get("title", "")
         album_id = int(request.data.get("album_id", 0))
         album = get_object_or_404(Album, id=album_id, owner=request.user)
-        s3 = _s3_client()
-        s3.complete_multipart_upload(
-            Bucket=BUCKET,
-            Key=object_key,
-            UploadId=upload_id,
-            MultipartUpload={"Parts": sorted(parts, key=lambda x: x["PartNumber"])},
-        )
+        try:
+            storage = get_upload_storage_service()
+        except StorageBackendNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=400)
+
+        storage.complete_multipart(object_key, upload_id, parts)
         photo = Photo.objects.create(owner=request.user, album=album, image=object_key, title=title)
         # 设置标签（可选）
         if tag_ids:
             photo.tags.set(tag_ids)
 
         # 异步：缩略图 + EXIF
-        generate_thumbnail.delay(photo.id)
-        extract_exif_task.delay(photo.id)
-        task_clip_vector_and_labels.delay(photo.id)
-        task_face_embeddings_and_group.delay(photo.id)
+        dispatch_post_upload_tasks(photo.id)
 
         return Response({"status": "completed"})
 
