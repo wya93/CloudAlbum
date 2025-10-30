@@ -1,12 +1,13 @@
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework import permissions
-from rest_framework.response import Response
-from django.db.models import Q
 from math import radians, cos, sin, asin, sqrt
-from .models import Photo
-from .serializers import PhotoSerializer
-from django.db.models import Count, Max
-import math
+
+from django.db.models import Count, Max, Q
+from django.db.models.functions import TruncMonth
+from rest_framework import permissions
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+
+from ..models import Photo
+from ..serializers import PhotoSerializer
 
 def haversine(lat1, lon1, lat2, lon2):
     # 返回两点距离（km）
@@ -77,7 +78,7 @@ def timeline_photos(request):
     data = (
         Photo.objects.filter(owner=user)
         .exclude(taken_at__isnull=True)
-        .annotate(month=models.functions.TruncMonth("taken_at"))
+        .annotate(month=TruncMonth("taken_at"))
         .values("month")
         .annotate(count=Count("id"), cover=Max("thumbnail"))
         .order_by("-month")

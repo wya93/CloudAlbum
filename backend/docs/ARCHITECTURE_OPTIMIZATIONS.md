@@ -16,6 +16,10 @@
 - 新增 `gallery.services.metadata.extract_exif_metadata`，集中处理 EXIF 解析、时间/坐标转换与异常容错。
 - `extract_exif_task` 只负责调度与落库，修复了原实现中 `Photo.objects.get(id=photo.id)`、`if exit` 等运行期错误，并保证 `update_fields` 正确。
 
+### 4. 视图模块分层
+- `gallery/views/` 目录将原有的 `views.py`、`views_auto.py`、`views_search.py`、`views_recommend.py` 拆分为 `base.py`、`auto.py`、`search.py`、`recommend.py`，通过 `__init__.py` 聚合对外入口，便于按子域维护。
+- 搜索、自动相册等接口统一挂载 `IsAuthenticated` 权限，并在自动相册接口补充参数校验与所有者过滤，降低越权风险。
+
 ## 迁移指南
 
 - 新增的服务模块位于 `gallery/services/`，需要在引用处通过 `from gallery.services import ...` 导入。

@@ -1,13 +1,17 @@
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework import permissions
-from rest_framework.response import Response
-import numpy as np
-from .models import Photo
-from .serializers import PhotoSerializer
 from datetime import datetime
-from django.db.models.functions import ExtractMonth, ExtractDay
 
-def _bytes_to_np(b): return np.frombuffer(b, dtype="float32")
+import numpy as np
+from django.db.models.functions import ExtractDay, ExtractMonth
+from rest_framework import permissions
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+
+from ..models import Photo
+from ..serializers import PhotoSerializer
+
+
+def _bytes_to_np(buffer):
+    return np.frombuffer(buffer, dtype="float32")
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])

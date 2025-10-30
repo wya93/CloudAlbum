@@ -5,14 +5,14 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
 from django.shortcuts import get_object_or_404
 
-from .models import Album, Photo, Tag, AlbumShare
-from .serializers import AlbumSerializer, PhotoSerializer, TagSerializer
+from ..models import Album, Photo, Tag, AlbumShare
+from ..serializers import AlbumSerializer, PhotoSerializer, TagSerializer
 from django.core.cache import cache
 from core.settings import CACHE_TTL
 from django.utils import timezone
 from datetime import timedelta
-from .utils_uploads import build_object_key, validate_upload_meta
-from .services import (
+from ..utils_uploads import build_object_key, validate_upload_meta
+from ..services import (
     StorageBackendNotConfigured,
     create_photos_from_form_upload,
     dispatch_post_upload_tasks,
