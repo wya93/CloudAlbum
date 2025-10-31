@@ -1,5 +1,3 @@
-"""Storage integration helpers."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +9,7 @@ from django.conf import settings
 
 
 class StorageBackendNotConfigured(RuntimeError):
-    """Raised when the expected storage backend is not available."""
+    """后端存储异常"""
 
 
 @dataclass(frozen=True)
@@ -25,7 +23,7 @@ class S3Config:
 
 
 class S3UploadService:
-    """Wraps S3 operations used by the upload API views."""
+    """对S3上传的一些封装"""
 
     def __init__(self, config: S3Config) -> None:
         self.config = config
