@@ -5,11 +5,20 @@ and orchestration logic shared across views, tasks and signal handlers.
 """
 
 from .storage import get_upload_storage_service, StorageBackendNotConfigured
-from .uploads import dispatch_post_upload_tasks, create_photos_from_form_upload
+from .ai import (
+    ClipEmbeddingService,
+    FaceRecognitionService,
+    get_clip_embedding_service,
+    get_face_recognition_service,
+)
+from .use_cases import AlbumUseCase
 
 __all__ = [
     "get_upload_storage_service",
     "StorageBackendNotConfigured",
-    "dispatch_post_upload_tasks",
-    "create_photos_from_form_upload",
+    "ClipEmbeddingService",
+    "FaceRecognitionService",
+    "get_clip_embedding_service",
+    "get_face_recognition_service",
+    "AlbumUseCase",
 ]
