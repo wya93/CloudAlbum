@@ -4,9 +4,9 @@ from __future__ import annotations
 
 """Domain use-case objects built on top of gallery services."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import timedelta
-from typing import Any, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Sequence
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
@@ -15,6 +15,53 @@ from ..models import Album, AlbumShare, Photo
 from ..utils_uploads import build_object_key, validate_upload_meta
 from .storage import get_upload_storage_service
 from .uploads import create_photos_from_form_upload, dispatch_post_upload_tasks
+
+
+@dataclass(frozen=True)
+class UploadEnvelope:
+    """统一的用例返回值封装，保证视图层输出结构稳定"""
+
+    payload: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"data": self.payload}
+
+
+@dataclass(frozen=True)
+class PresignUploadResult:
+    object_key: str
+    url: str
+    method: str = "PUT"
+    headers: Dict[str, str] = field(default_factory=dict)
+
+    def as_envelope(self) -> UploadEnvelope:
+        return UploadEnvelope(payload=asdict(self))
+
+
+@dataclass(frozen=True)
+class MultipartInitiateResult:
+    object_key: str
+    upload_id: str
+
+    def as_envelope(self) -> UploadEnvelope:
+        return UploadEnvelope(payload=asdict(self))
+
+
+@dataclass(frozen=True)
+class MultipartSignPartResult:
+    url: str
+    method: str = "PUT"
+
+    def as_envelope(self) -> UploadEnvelope:
+        return UploadEnvelope(payload=asdict(self))
+
+
+@dataclass(frozen=True)
+class MultipartCompleteResult:
+    status: str = "completed"
+
+    def as_envelope(self) -> UploadEnvelope:
+        return UploadEnvelope(payload=asdict(self))
 
 
 @dataclass
@@ -67,7 +114,9 @@ class AlbumUseCase:
         dispatch_post_upload_tasks(photo.id)
         return photo
 
-    def presign_upload(self, album_id: int, filename: str, content_type: str, size: int) -> dict:
+    def presign_upload(
+        self, album_id: int, filename: str, content_type: str, size: int
+    ) -> UploadEnvelope:
         album = self.context.require_album(album_id)
         try:
             validate_upload_meta(content_type, size)
@@ -77,12 +126,12 @@ class AlbumUseCase:
         storage = get_upload_storage_service()
         object_key = build_object_key(self.user.id, album.id, filename)
         url = storage.generate_presigned_put(object_key, content_type)
-        return {
-            "object_key": object_key,
-            "url": url,
-            "method": "PUT",
-            "headers": {"Content-Type": content_type},
-        }
+        result = PresignUploadResult(
+            object_key=object_key,
+            url=url,
+            headers={"Content-Type": content_type},
+        )
+        return result.as_envelope()
 
     def finalize_upload(self, album_id: int, object_key: str, title: str, tag_ids: Sequence[int]) -> Photo:
         if not object_key:
@@ -92,7 +141,9 @@ class AlbumUseCase:
             raise ValidationError("object_key 非法")
         return self._create_photo(album, object_key, title, tag_ids)
 
-    def initiate_multipart(self, album_id: int, filename: str, content_type: str, size: int) -> dict:
+    def initiate_multipart(
+        self, album_id: int, filename: str, content_type: str, size: int
+    ) -> UploadEnvelope:
         album = self.context.require_album(album_id)
         try:
             validate_upload_meta(content_type, size)
@@ -102,16 +153,20 @@ class AlbumUseCase:
         storage = get_upload_storage_service()
         object_key = build_object_key(self.user.id, album.id, filename)
         init = storage.initiate_multipart(object_key, content_type)
-        return {"object_key": object_key, "upload_id": init["UploadId"]}
+        result = MultipartInitiateResult(object_key=object_key, upload_id=init["UploadId"])
+        return result.as_envelope()
 
-    def sign_multipart_part(self, object_key: str, upload_id: str, part_number: int) -> dict:
+    def sign_multipart_part(
+        self, object_key: str, upload_id: str, part_number: int
+    ) -> UploadEnvelope:
         if not object_key or f"/{self.user.id}/" not in object_key:
             raise ValidationError("object_key 非法")
         if part_number <= 0:
             raise ValidationError("part_number 非法")
         storage = get_upload_storage_service()
         url = storage.generate_presigned_part_url(object_key, upload_id, part_number)
-        return {"url": url}
+        result = MultipartSignPartResult(url=url)
+        return result.as_envelope()
 
     def complete_multipart(
         self,
@@ -121,7 +176,7 @@ class AlbumUseCase:
         parts,
         title: str,
         tag_ids: Sequence[int],
-    ) -> dict:
+    ) -> UploadEnvelope:
         if not object_key:
             raise ValidationError("object_key 非法")
         if not upload_id:
@@ -130,4 +185,4 @@ class AlbumUseCase:
         storage = get_upload_storage_service()
         storage.complete_multipart(object_key, upload_id, parts)
         self._create_photo(album, object_key, title, tag_ids)
-        return {"status": "completed"}
+        return MultipartCompleteResult().as_envelope()
