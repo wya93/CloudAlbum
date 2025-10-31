@@ -109,7 +109,7 @@ class AlbumViewSet(viewsets.ModelViewSet):
 
         return Response(PhotoSerializer(photo).data, status=201)
 
-    # ---------- Multipart ----------
+    # ---------- 分片上传 ----------
 
     @action(methods=['post'], detail=False, url_path='multipart_initiate')
     def multipart_initiate(self, request):

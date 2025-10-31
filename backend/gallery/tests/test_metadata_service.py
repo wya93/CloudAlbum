@@ -23,7 +23,7 @@ class ExtractExifMetadataTests(TestCase):
 
     def test_taken_at_uses_current_timezone(self):
         photo = self._build_photo()
-        exif_payload = {36867: "2023:10:01 12:34:56"}  # DateTimeOriginal
+        exif_payload = {36867: "2023:10:01 12:34:56"}  # DateTimeOriginal 字段
         for zone in ["UTC", "Asia/Shanghai"]:
             with self.subTest(zone=zone), timezone.override(zone):
                 with patch("gallery.services.metadata.Image.open") as mock_open:

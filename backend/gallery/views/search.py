@@ -55,7 +55,7 @@ def search_photos(request):
     # GPS过滤（圆形范围）
     lat = request.query_params.get("lat")
     lng = request.query_params.get("lng")
-    radius = request.query_params.get("radius")  # km
+    radius = request.query_params.get("radius")  # 单位：公里
     if lat and lng and radius:
         lat = float(lat)
         lng = float(lng)
@@ -107,7 +107,7 @@ def map_points(request):
 def map_clusters(request):
     """简易聚合，按zoom级别聚类"""
     zoom = int(request.query_params.get("zoom", 8))
-    cell_size = 360 / (2 ** zoom)  # 近似每格经度宽
+    cell_size = 360 / (2 ** zoom)  # 近似每格经度宽度
     user = request.user
     qs = Photo.objects.filter(owner=user, gps_lat__isnull=False, gps_lng__isnull=False)
 
