@@ -1,5 +1,3 @@
-"""Metadata extraction helpers for gallery photos."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -45,7 +43,7 @@ def _parse_taken_at(value: str) -> Optional[datetime]:
 
 
 def extract_exif_metadata(photo: Photo) -> Dict[str, Optional[object]]:
-    """Return model field updates extracted from EXIF information."""
+    """更新photo模型的exif字段"""
 
     if not photo.image:
         return {}
