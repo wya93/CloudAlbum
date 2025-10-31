@@ -78,12 +78,12 @@ class AlbumViewSet(viewsets.ModelViewSet):
         size = int(request.data.get("size", 0))
         use_case = self.get_use_case()
         try:
-            payload = use_case.presign_upload(album_id, filename, content_type, size)
+            envelope = use_case.presign_upload(album_id, filename, content_type, size)
         except StorageBackendNotConfigured as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except ValidationError as exc:
             raise DRFValidationError(exc.messages)
-        return Response(payload)
+        return Response(envelope.to_dict())
 
     @action(methods=['post'], detail=False, url_path='finalize_upload')
     def finalize_upload(self, request):
@@ -123,13 +123,13 @@ class AlbumViewSet(viewsets.ModelViewSet):
         size = int(request.data.get("size", 0))
         use_case = self.get_use_case()
         try:
-            payload = use_case.initiate_multipart(album_id, filename, content_type, size)
+            envelope = use_case.initiate_multipart(album_id, filename, content_type, size)
         except StorageBackendNotConfigured as exc:
             return Response({"detail": str(exc)}, status=400)
         except ValidationError as exc:
             raise DRFValidationError(exc.messages)
 
-        return Response(payload)
+        return Response(envelope.to_dict())
 
     @action(methods=['post'], detail=False, url_path='multipart_sign_part')
     def multipart_sign_part(self, request):
@@ -143,13 +143,13 @@ class AlbumViewSet(viewsets.ModelViewSet):
 
         use_case = self.get_use_case()
         try:
-            payload = use_case.sign_multipart_part(object_key, upload_id, part_number)
+            envelope = use_case.sign_multipart_part(object_key, upload_id, part_number)
         except StorageBackendNotConfigured as exc:
             return Response({"detail": str(exc)}, status=400)
         except ValidationError as exc:
             raise DRFValidationError(exc.messages)
 
-        return Response(payload)
+        return Response(envelope.to_dict())
 
     @action(methods=['post'], detail=False, url_path='multipart_complete')
     def multipart_complete(self, request):
@@ -168,13 +168,15 @@ class AlbumViewSet(viewsets.ModelViewSet):
         album_id = int(request.data.get("album_id", 0))
         use_case = self.get_use_case()
         try:
-            payload = use_case.complete_multipart(album_id, object_key, upload_id, parts, title, tag_ids)
+            envelope = use_case.complete_multipart(
+                album_id, object_key, upload_id, parts, title, tag_ids
+            )
         except StorageBackendNotConfigured as exc:
             return Response({"detail": str(exc)}, status=400)
         except ValidationError as exc:
             raise DRFValidationError(exc.messages)
 
-        return Response(payload)
+        return Response(envelope.to_dict())
 
 
 class PhotoViewSet(viewsets.ModelViewSet):
