@@ -11,8 +11,6 @@ from .ai import (
     get_clip_embedding_service,
     get_face_recognition_service,
 )
-from .use_cases import AlbumUseCase
-
 __all__ = [
     "get_upload_storage_service",
     "StorageBackendNotConfigured",
@@ -20,5 +18,4 @@ __all__ = [
     "FaceRecognitionService",
     "get_clip_embedding_service",
     "get_face_recognition_service",
-    "AlbumUseCase",
 ]

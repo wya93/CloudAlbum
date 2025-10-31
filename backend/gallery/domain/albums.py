@@ -1,8 +1,6 @@
-"""Domain use-case objects built on top of gallery services."""
+"""领域用例：围绕相册的核心业务编排。"""
 
 from __future__ import annotations
-
-"""Domain use-case objects built on top of gallery services."""
 
 from dataclasses import asdict, dataclass, field
 from datetime import timedelta
@@ -12,9 +10,12 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
 from ..models import Album, AlbumShare, Photo
+from ..services.storage import get_upload_storage_service
+from ..services.uploads import (
+    create_photos_from_form_upload,
+    dispatch_post_upload_tasks,
+)
 from ..utils_uploads import build_object_key, validate_upload_meta
-from .storage import get_upload_storage_service
-from .uploads import create_photos_from_form_upload, dispatch_post_upload_tasks
 
 
 @dataclass(frozen=True)
