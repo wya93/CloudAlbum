@@ -1,8 +1,5 @@
-<<<<<<< HEAD
-=======
 """存储集成相关工具。"""
 
->>>>>>> remotes/origin/codex/analyze-project-architecture-for-optimization
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,11 +11,7 @@ from django.conf import settings
 
 
 class StorageBackendNotConfigured(RuntimeError):
-<<<<<<< HEAD
-    """后端存储异常"""
-=======
     """当目标存储后端不可用时抛出。"""
->>>>>>> remotes/origin/codex/analyze-project-architecture-for-optimization
 
 
 @dataclass(frozen=True)
@@ -32,11 +25,7 @@ class S3Config:
 
 
 class S3UploadService:
-<<<<<<< HEAD
-    """对S3上传的一些封装"""
-=======
     """封装上传接口使用到的 S3 操作。"""
->>>>>>> remotes/origin/codex/analyze-project-architecture-for-optimization
 
     def __init__(self, config: S3Config) -> None:
         self.config = config

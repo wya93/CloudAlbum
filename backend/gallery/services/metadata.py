@@ -1,8 +1,5 @@
-<<<<<<< HEAD
-=======
 """相册照片的元数据提取工具。"""
 
->>>>>>> remotes/origin/codex/analyze-project-architecture-for-optimization
 from __future__ import annotations
 
 from datetime import datetime
@@ -48,11 +45,7 @@ def _parse_taken_at(value: str) -> Optional[datetime]:
 
 
 def extract_exif_metadata(photo: Photo) -> Dict[str, Optional[object]]:
-<<<<<<< HEAD
-    """更新photo模型的exif字段"""
-=======
     """返回从 EXIF 信息中解析出的字段更新。"""
->>>>>>> remotes/origin/codex/analyze-project-architecture-for-optimization
 
     if not photo.image:
         return {}
