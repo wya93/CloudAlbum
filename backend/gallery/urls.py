@@ -1,10 +1,20 @@
-from rest_framework.routers import DefaultRouter
-from .views import AlbumViewSet, PhotoViewSet, TagViewSet
-from .views import public_share_view
 from django.urls import path
-from .views_search import search_photos, timeline_photos, map_points, map_clusters
-from .views_recommend import similar_photos, memories_today
-from .views_auto import auto_by_label, auto_by_face  # 可按你喜好组织
+from rest_framework.routers import DefaultRouter
+
+from .views import (
+    AlbumViewSet,
+    PhotoViewSet,
+    TagViewSet,
+    auto_by_face,
+    auto_by_label,
+    map_clusters,
+    map_points,
+    memories_today,
+    public_share_view,
+    search_photos,
+    similar_photos,
+    timeline_photos,
+)
 
 router = DefaultRouter()
 router.register("albums", AlbumViewSet, basename="album")

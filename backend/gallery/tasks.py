@@ -1,79 +1,110 @@
-from celery import shared_task
-from PIL import Image, ExifTags
+"""与照片处理相关的 Celery 任务。"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
 from io import BytesIO
-from django.core.files.base import ContentFile
 from pathlib import Path
+from typing import Dict, Optional
+
+from celery import shared_task
+from PIL import Image, ImageOps
+from django.core.files.base import ContentFile
+
 from .models import Photo
-from django.utils import timezone
+from .services.metadata import extract_exif_metadata
 
-def _dms_to_deg(dms, ref):
-    # dms 为 ((deg_num,deg_den), (min_num,min_den), (sec_num,sec_den))
-    # 将 GPS 坐标中的 “度分秒（DMS）格式” 转换为 “十进制度数（Decimal Degrees）格式
-    try:
-        deg = dms[0][0] / dms[0][1]
-        minute = dms[1][0] / dms[1][1]
-        sec = dms[2][0] / dms[2][1]
-        val = deg + minute/60 + sec/3600
-        if ref in ['S', 'W']:
-            val = -val
-        return val
-    except Exception:
-        return None
+logger = logging.getLogger(__name__)
 
-@shared_task
-def generate_thumbnail(photo_id):
-    '''异步生成缩略图'''
-    try:
-        photo = Photo.objects.get(id=photo_id)
-        if not photo.image or photo.thumbnail:
-            return 'skip'
 
-        img = Image.open(photo.image)
+@dataclass(frozen=True)
+class TaskResult:
+    """统一封装任务返回值，兼容字符串序列化。"""
+
+    status: str
+    detail: Optional[str] = None
+
+    def render(self) -> str:
+        if not self.detail:
+            return self.status
+        return f"{self.status}:{self.detail}"
+
+    @classmethod
+    def ok(cls) -> "TaskResult":
+        return cls(status="ok")
+
+    @classmethod
+    def skip(cls, reason: str) -> "TaskResult":
+        return cls(status="skip", detail=reason)
+
+    @classmethod
+    def missing(cls, entity: str) -> "TaskResult":
+        return cls(status="missing", detail=entity)
+
+    @classmethod
+    def error(cls, message: str) -> "TaskResult":
+        return cls(status="err", detail=message)
+
+
+def _generate_thumbnail_file(photo: Photo) -> ContentFile:
+    """生成缩略图文件对象，并自动处理方向。"""
+
+    with Image.open(photo.image) as raw_img:
+        img = ImageOps.exif_transpose(raw_img)
         img.thumbnail((300, 300))
-
         buffer = BytesIO()
-        img.save(buffer, format='JPEG')
-        thumb_name = Path(photo.image.name).stem + '_thumb.jpg'
-        photo.thumbnail.save(thumb_name, ContentFile(buffer.getvalue()), save=True)
-        return 'ok'
-    except Exception as e:
-        return str(e)
+        img.save(buffer, format="JPEG")
+    return ContentFile(buffer.getvalue())
+
+
+def _get_photo(photo_id: int) -> Optional[Photo]:
+    return Photo.objects.filter(id=photo_id).first()
+
 
 @shared_task
-def extract_exif_task(photo_id):
-    try: 
-        photo = Photo.objects.get(id=photo.id)
-        img = Image.open(photo.image)
-        photo.width, photo.height = img.size
-        exif = getattr(img, '_getexif', lambda: None)()
-        if exit:
-            exif_dict = {ellipsis.TAGS.get(k, k): v for (k, v) in exif.items()}
-            photo.camera_make = str(exif_dict.get('Make', '')).strip()
-            photo.camera_model = str(exif_dict.get('Model', '')).strip()
-            photo.focal_length = str(exif_dict.get('FocalLength', '')).strip()
-            photo.exposure_time = str(exif_dict.get('ExposureTime', '')).strip()
-            photo.f_number = str(exif_dict.get('FNumber', '')).strip()
-            iso = exif_dict.get('ISOSpeedRatings') or exif_dict.get('PhotographicSensitivity')
-            photo.iso = int(iso) if isinstance(iso, int) else None
+def generate_thumbnail(photo_id: int) -> str:
+    """异步生成缩略图。"""
 
-            #拍摄时间
-            dt = exif_dict.get('DateTimeOriginal') or exif_dict.get('DateTime')
-            if dt:
-                try: 
-                    photo.taken_at = timezone.make_aware(timezone.datetime.strptime(dt, '%Y:%m:%d %H:%M:%S'))
-                except Exception:
-                    pass
-            gps = exif_dict.get('GPSInfo')
-            if gps:
-                gps_parsed = {ExifTags.GPSTAGS.get(k, k): v for k, v in gps.items()}
-                lat = gps_parsed.get('GPSLatitude')
-                lat_ref = gps_parsed.get('GPSLatitudeRef')
-                lng = gps_parsed.get('GPSLongitude')
-                lng_ref = gps_parsed.get('GPSLongitudeRef')
-                if lat and lat_ref and lng and lng_ref:
-                    photo.gps_lat = _dms_to_deg(lat, lat_ref)
-                    photo.gps_lng = _dms_to_deg(lng, lng_ref)
-            photo.save(update_fields = ['width','height','camera_make','camera_model','focal_length','exposure_time','f_number','iso','taken_at','gps_lat','gps_lng'])
-            return 'ok'
-    except Exception as e:
-        return f'err:{e}'
+    photo = _get_photo(photo_id)
+    if photo is None:
+        return TaskResult.missing("photo").render()
+
+    if not photo.image:
+        return TaskResult.skip("no_image").render()
+    if photo.thumbnail:
+        return TaskResult.skip("has_thumbnail").render()
+
+    try:
+        thumb_content = _generate_thumbnail_file(photo)
+        thumb_name = Path(photo.image.name).stem + "_thumb.jpg"
+        photo.thumbnail.save(thumb_name, thumb_content, save=True)
+    except Exception as exc:  # pragma: no cover - 依赖外部文件系统
+        logger.exception("生成缩略图失败", extra={"photo_id": photo_id})
+        return TaskResult.error(str(exc)).render()
+
+    return TaskResult.ok().render()
+
+
+@shared_task
+def extract_exif_task(photo_id: int) -> str:
+    """提取 EXIF 信息并保存。"""
+
+    photo = _get_photo(photo_id)
+    if photo is None:
+        return TaskResult.missing("photo").render()
+
+    try:
+        updates: Dict[str, Optional[str]] = extract_exif_metadata(photo)
+    except Exception as exc:  # pragma: no cover - 依赖 PIL/Exif 外部实现
+        logger.exception("EXIF 提取失败", extra={"photo_id": photo_id})
+        return TaskResult.error(str(exc)).render()
+
+    if not updates:
+        return TaskResult.skip("no_updates").render()
+
+    for field, value in updates.items():
+        setattr(photo, field, value)
+
+    photo.save(update_fields=list(updates.keys()))
+    return TaskResult.ok().render()

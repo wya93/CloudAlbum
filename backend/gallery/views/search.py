@@ -1,12 +1,13 @@
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework import permissions
-from rest_framework.response import Response
-from django.db.models import Q
 from math import radians, cos, sin, asin, sqrt
-from .models import Photo
-from .serializers import PhotoSerializer
-from django.db.models import Count, Max
-import math
+
+from django.db.models import Count, Max, Q
+from django.db.models.functions import TruncMonth
+from rest_framework import permissions
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+
+from ..models import Photo
+from ..serializers import PhotoSerializer
 
 def haversine(lat1, lon1, lat2, lon2):
     # 返回两点距离（km）
@@ -54,7 +55,7 @@ def search_photos(request):
     # GPS过滤（圆形范围）
     lat = request.query_params.get("lat")
     lng = request.query_params.get("lng")
-    radius = request.query_params.get("radius")  # km
+    radius = request.query_params.get("radius")  # 单位：公里
     if lat and lng and radius:
         lat = float(lat)
         lng = float(lng)
@@ -77,7 +78,7 @@ def timeline_photos(request):
     data = (
         Photo.objects.filter(owner=user)
         .exclude(taken_at__isnull=True)
-        .annotate(month=models.functions.TruncMonth("taken_at"))
+        .annotate(month=TruncMonth("taken_at"))
         .values("month")
         .annotate(count=Count("id"), cover=Max("thumbnail"))
         .order_by("-month")
@@ -106,7 +107,7 @@ def map_points(request):
 def map_clusters(request):
     """简易聚合，按zoom级别聚类"""
     zoom = int(request.query_params.get("zoom", 8))
-    cell_size = 360 / (2 ** zoom)  # 近似每格经度宽
+    cell_size = 360 / (2 ** zoom)  # 近似每格经度宽度
     user = request.user
     qs = Photo.objects.filter(owner=user, gps_lat__isnull=False, gps_lng__isnull=False)
 
