@@ -18,6 +18,7 @@
 
 ### 4. 视图模块分层
 - `gallery/views/` 目录将原有的 `views.py`、`views_auto.py`、`views_search.py`、`views_recommend.py` 拆分为 `base.py`、`auto.py`、`search.py`、`recommend.py`，通过 `__init__.py` 聚合对外入口，便于按子域维护。
+- 引入 `gallery.domain` 包承载相册领域用例（如 `AlbumUseCase`），实现视图层对 ORM 的间接调用，简化权限校验与上传编排的一致性。
 - 搜索、自动相册等接口统一挂载 `IsAuthenticated` 权限，并在自动相册接口补充参数校验与所有者过滤，降低越权风险。
 
 ## 迁移指南
@@ -28,6 +29,5 @@
 
 ## 后续建议
 
-- 将 AI 相关任务中模型加载逻辑迁移至服务层，实现懒加载与缓存。
-- 在 `gallery.services.metadata` 中补充单元测试，覆盖多时区与异常 EXIF 案例。
-- 基于服务层可以进一步引入领域 use-case 对象，削减视图层对 ORM 的直接依赖。
+- 按照片、分享等子域逐步补全 `gallery.domain` 下的用例，实现视图层的完全瘦身。
+- 将更多查询与聚合逻辑迁移至领域层或查询服务，避免视图中直接拼装复杂 ORM 语句。

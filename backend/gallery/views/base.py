@@ -10,8 +10,8 @@ from core.settings import CACHE_TTL
 
 from ..models import Photo, Tag, AlbumShare
 from ..serializers import AlbumSerializer, PhotoSerializer, TagSerializer
+from ..domain import AlbumUseCase
 from ..services import StorageBackendNotConfigured
-from ..services.use_cases import AlbumUseCase
 
 class AlbumViewSet(viewsets.ModelViewSet):
     """相册管理"""
