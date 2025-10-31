@@ -1,4 +1,4 @@
-"""AI-related services with lazy model loading and caching utilities."""
+"""AI 服务：提供延迟加载与缓存能力。"""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from typing import Any, Dict, Optional, Sequence, Tuple, TYPE_CHECKING
 
 from PIL import Image
 
-if TYPE_CHECKING:  # pragma: no cover - typing helper
+if TYPE_CHECKING:  # pragma: no cover - 类型辅助
     import numpy as np
 
 _NUMPY_IMPORT_ERROR: Optional[ModuleNotFoundError] = None
-try:  # numpy may be absent in certain lightweight deployments
+try:  # 精简部署环境可能缺少 numpy
     import numpy as _np  # type: ignore
-except ModuleNotFoundError as exc:  # pragma: no cover - surfaced when used
+except ModuleNotFoundError as exc:  # pragma: no cover - 在实际使用时抛出
     _np = None  # type: ignore
     _NUMPY_IMPORT_ERROR = exc
 else:
@@ -27,10 +27,10 @@ def _require_numpy():
 
 
 _TORCH_IMPORT_ERROR: Optional[ModuleNotFoundError] = None
-try:  # torch/open_clip may be absent in environments without AI features
+try:  # 未开启 AI 特性的环境可能缺少 torch/open_clip
     import torch  # type: ignore
     import open_clip  # type: ignore
-except ModuleNotFoundError as exc:  # pragma: no cover - surfaced when used
+except ModuleNotFoundError as exc:  # pragma: no cover - 在实际使用时抛出
     torch = None  # type: ignore
     open_clip = None  # type: ignore
     _TORCH_IMPORT_ERROR = exc
@@ -45,7 +45,7 @@ def _require_clip_modules():
 
 
 class ClipEmbeddingService:
-    """Provide CLIP image/text embeddings with lazy initialisation."""
+    """提供延迟初始化的 CLIP 图像/文本向量能力。"""
 
     def __init__(self, model_name: str = "ViT-B-32", pretrained: str = "openai", device: Optional[str] = None):
         self.model_name = model_name
@@ -118,7 +118,7 @@ class ClipEmbeddingService:
 
 
 class FaceRecognitionService:
-    """Wrap face_recognition helpers with lazy imports."""
+    """封装 face_recognition，支持按需导入。"""
 
     def __init__(self) -> None:
         self._module = None

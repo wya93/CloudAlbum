@@ -21,7 +21,7 @@ def task_clip_vector_and_labels(photo_id: int):
         with Image.open(photo.image) as raw_img:
             img = raw_img.convert("RGB")
             try:
-                vec = clip_service.encode_image(img)  # (512,)
+                vec = clip_service.encode_image(img)  # 向量形状 (512,)
             finally:
                 img.close()
 
@@ -30,9 +30,9 @@ def task_clip_vector_and_labels(photo_id: int):
 
         # 2. 语义标签
         # 向量化标签文本（可缓存）
-        txt_vecs = clip_service.encode_texts(LST_LABEL_ZH)  # (N,512)
+        txt_vecs = clip_service.encode_texts(LST_LABEL_ZH)  # 向量形状 (N,512)
         sim = (vec[None, :] @ txt_vecs.T)[0]     # 余弦相似：CLIP 已归一化
-        top_idx = sim.argsort()[::-1][:5]        # 取 Top-5 标签
+        top_idx = sim.argsort()[::-1][:5]        # 取前五个标签
         with transaction.atomic():
             photo.save(update_fields=["clip_vector", "vector_done"])
             for idx in top_idx:
@@ -61,7 +61,7 @@ def task_face_embeddings_and_group(photo_id: int, tol: float = 0.48):
             photo.save(update_fields=["face_group_ids", "face_done"])
             return "no_face"
 
-        encs = face_service.face_encodings(img, locations)  # 128-d
+        encs = face_service.face_encodings(img, locations)  # 128 维
 
         # 暂缺持久化的人脸向量索引，当前策略：为每个新检测到的人脸创建分组
         group_ids = []

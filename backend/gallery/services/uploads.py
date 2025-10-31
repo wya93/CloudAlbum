@@ -1,4 +1,4 @@
-"""Upload orchestration utilities."""
+"""上传编排相关工具。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from ..tasks_ai import task_clip_vector_and_labels, task_face_embeddings_and_gro
 
 
 def dispatch_post_upload_tasks(photo_id: int) -> None:
-    """Schedule asynchronous processing pipeline for a photo."""
+    """为照片调度异步处理流水线。"""
 
     generate_thumbnail.delay(photo_id)
     extract_exif_task.delay(photo_id)

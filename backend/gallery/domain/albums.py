@@ -72,12 +72,12 @@ class AlbumUploadContext:
     def require_album(self, album_id: int) -> Album:
         try:
             return Album.objects.get(id=album_id, owner=self.user)
-        except Album.DoesNotExist as exc:  # pragma: no cover - defensive, validated in tests
+        except Album.DoesNotExist as exc:  # pragma: no cover - 防御性分支，单测已校验
             raise PermissionDenied("相册不存在或无权访问") from exc
 
 
 class AlbumUseCase:
-    """Coordinate album-level operations for the current user."""
+    """为当前用户协调相册相关的核心操作。"""
 
     def __init__(self, user):
         self.context = AlbumUploadContext(user=user)

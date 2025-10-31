@@ -1,4 +1,4 @@
-"""View entrypoints aggregated for router imports."""
+"""聚合视图入口，便于路由导入。"""
 
 from .auto import auto_by_face, auto_by_label
 from .base import AlbumViewSet, PhotoViewSet, TagViewSet, public_share_view

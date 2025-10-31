@@ -1,4 +1,4 @@
-"""Metadata extraction helpers for gallery photos."""
+"""相册照片的元数据提取工具。"""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _parse_taken_at(value: str) -> Optional[datetime]:
 
 
 def extract_exif_metadata(photo: Photo) -> Dict[str, Optional[object]]:
-    """Return model field updates extracted from EXIF information."""
+    """返回从 EXIF 信息中解析出的字段更新。"""
 
     if not photo.image:
         return {}
@@ -89,5 +89,5 @@ def extract_exif_metadata(photo: Photo) -> Dict[str, Optional[object]]:
             updates["gps_lat"] = _dms_to_deg(lat, lat_ref)
             updates["gps_lng"] = _dms_to_deg(lng, lng_ref)
 
-    # Filter out None values so update_fields remains concise
+    # 过滤掉 None，保持 update_fields 紧凑
     return {key: value for key, value in updates.items() if value is not None}
